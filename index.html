@@ -1,0 +1,758 @@
+<!-- 별 수가르기 — 수 가르기·모으기 학습 PWA (단일 파일) / 풀기·출력·기록 + 부모 모드 -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>별 수 가르기·모으기</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f6a623">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="별 수가르기">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg:#fdf6ec; --ink:#2b2b3a; --line-thin:#e3ddd0; --line:#6b6151;
+    --accent:#f6a623; --accent-2:#5b8def; --mine:#1f8a6d; --muted:#9a917c; --stamp:#d6453a;
+    --pad-bg:#fffdf8;
+    --bw: min(92vw, 440px);
+    --panel: min(92vw, 440px);
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; }
+  body {
+    background:radial-gradient(1200px 600px at 50% -200px,#fff8e8,var(--bg));
+    color:var(--ink);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+    min-height:100vh; padding:12px; user-select:none;
+  }
+  /* 모드 전환 (풀기 / 출력 / 기록) */
+  body:not(.mode-play)    .play-only    { display:none !important; }
+  body:not(.mode-print)   .print-only   { display:none !important; }
+  body:not(.mode-history) .history-only { display:none !important; }
+
+  .layout { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .sidebar { display:flex; flex-direction:column; align-items:center; width:100%; gap:4px; }
+  .main { display:flex; flex-direction:column; align-items:center; width:100%; }
+  .pane { display:flex; flex-direction:column; align-items:center; width:100%; }
+
+  header { text-align:center; }
+  h1 { font-size:24px; margin:2px 0; letter-spacing:-0.5px; -webkit-user-select:none; user-select:none; }
+  h1 .comet { color:var(--accent); }
+  .tabs { display:flex; gap:6px; margin:6px 0; justify-content:center; flex-wrap:wrap; }
+  .tab { border:2px solid var(--line-thin); background:#fff; color:var(--ink);
+    border-radius:999px; padding:7px 15px; font-size:14px; font-weight:800; cursor:pointer; }
+  .tab.on { background:var(--ink); border-color:var(--ink); color:#fff; }
+
+  .strip { width:var(--panel); background:#fff; border:2px solid var(--line-thin);
+    border-radius:14px; padding:8px 12px; margin:6px 0; text-align:center; font-weight:800; font-size:14px; }
+  .strip .stats { color:#6f6757; }
+  .mission { margin-top:4px; font-size:13px; color:var(--accent-2); }
+  .mission.done { color:#1f8a6d; }
+
+  .controls { display:flex; flex-direction:column; gap:5px; width:var(--panel); margin:6px 0; }
+  .rowc { display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; }
+  .label { font-size:12px; color:var(--muted); width:38px; text-align:right; flex:0 0 auto; }
+  .pill { border:2px solid var(--line-thin); background:#fff; color:var(--ink);
+    border-radius:999px; padding:6px 11px; font-size:12.5px; font-weight:800; cursor:pointer; white-space:nowrap;
+    transition:transform .05s, background .15s, border-color .15s; }
+  .pill:active { transform:scale(.96); }
+  .pill.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .pill.locked { opacity:.55; cursor:not-allowed; background:#f3eee2; color:#b3ab98; }
+
+  .progress { width:var(--panel); margin:2px 0 6px; }
+  .ptext { text-align:center; font-size:13px; color:var(--muted); font-weight:800; margin-bottom:4px; }
+  .pbar { height:12px; background:#efe7d6; border-radius:999px; overflow:hidden; }
+  .pfill { height:100%; background:linear-gradient(90deg,#ffcf6b,var(--accent)); border-radius:999px; transition:width .3s; }
+
+  /* 수 가르기/모으기 다이어그램 (SVG) */
+  .bondHost { width:var(--bw); margin:8px 0 2px; }
+  svg.bond { width:100%; height:auto; display:block; }
+  svg.bond text { font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif; font-weight:800; }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  rect.blankpulse { animation:blink 1.1s ease-in-out infinite; }
+
+  .pad { display:grid; gap:7px; width:var(--bw); margin-top:6px; }
+  .num { background:var(--pad-bg); border:2px solid var(--line-thin); border-radius:14px;
+    font-size:22px; font-weight:800; color:var(--ink); cursor:pointer; aspect-ratio:1/1;
+    display:flex; align-items:center; justify-content:center; transition:transform .05s, background .12s; }
+  .num:active { transform:scale(.92); background:#fff3d6; }
+  .num.bad { background:#ffd9d6; border-color:#f0a59e; }
+
+  .actions { display:flex; gap:8px; width:var(--bw); margin-top:10px; }
+  .btn { flex:1; border:none; border-radius:12px; padding:12px 0; font-size:15px; font-weight:800; cursor:pointer; transition:transform .05s; }
+  .btn:active { transform:scale(.97); }
+  .btn.new { background:var(--accent-2); color:#fff; }
+  .btn.hintc { background:#ffe9bf; color:#9a6b16; }
+  .btn.hintc:disabled { opacity:.5; cursor:not-allowed; }
+  .btn.ghost { background:#f1ece0; color:#7a715b; }
+
+  .status { min-height:34px; margin-top:10px; text-align:center; font-size:14.5px; font-weight:700; color:#6f6757; line-height:1.4; width:var(--bw); }
+
+  /* 출력(인쇄) 옵션 */
+  .popt { width:var(--panel); display:flex; flex-direction:column; gap:10px; margin-top:4px; }
+  .poptrow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .plabel { font-size:13px; color:var(--muted); font-weight:800; width:42px; flex:0 0 auto; }
+  .stepper { display:flex; align-items:center; gap:10px; }
+  .stepper button { width:36px; height:36px; border-radius:10px; border:2px solid var(--line-thin); background:#fff;
+    font-size:20px; font-weight:900; cursor:pointer; color:var(--ink); }
+  .stepper span { font-size:18px; font-weight:900; min-width:24px; text-align:center; }
+  .pcheck { font-size:14px; font-weight:800; color:var(--ink); display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .pcheck input { width:20px; height:20px; }
+
+  /* 기록(도장판) */
+  .summary { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:var(--panel); margin:8px 0; }
+  .scard { background:#fff; border:2px solid var(--line-thin); border-radius:14px; padding:10px 6px; text-align:center; }
+  .scard .v { font-size:20px; font-weight:900; color:var(--ink); }
+  .scard .k { font-size:11px; color:var(--muted); font-weight:800; margin-top:2px; }
+  .calnav { display:flex; align-items:center; justify-content:center; gap:14px; width:var(--panel); margin:8px 0 4px; }
+  .calnav button { border:2px solid var(--line-thin); background:#fff; border-radius:10px;
+    width:38px; height:38px; font-size:18px; font-weight:900; cursor:pointer; color:var(--ink); }
+  .calnav .title { font-size:17px; font-weight:900; min-width:130px; text-align:center; }
+  #calGrid { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; width:var(--panel); }
+  .cal-h { text-align:center; font-size:12px; font-weight:900; color:var(--muted); padding:4px 0; }
+  .cal-h.sun { color:#d6453a; } .cal-h.sat { color:var(--accent-2); }
+  .cal-cell { position:relative; aspect-ratio:1/1; background:#fff; border:2px solid var(--line-thin);
+    border-radius:10px; display:flex; align-items:flex-start; justify-content:flex-start; }
+  .cal-cell.empty { background:transparent; border:none; }
+  .cal-cell.today { border-color:var(--accent); }
+  .cal-num { font-size:11px; font-weight:800; color:#b3ab98; padding:3px 5px; }
+  .stamp { position:absolute; inset:14% 14% 10% 14%; display:flex; align-items:center; justify-content:center;
+    color:var(--stamp); border:2.5px solid var(--stamp); border-radius:50%;
+    font-size:min(5vw,22px); font-weight:900; transform:rotate(-13deg); opacity:.92;
+    box-shadow:inset 0 0 0 2px #fff, inset 0 0 0 3.5px #f3b6b0; }
+  .cal-partial { position:absolute; bottom:4px; right:5px; font-size:10px; font-weight:900; color:var(--accent); }
+
+  /* 완료/축하 모달 */
+  #win, #master { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(40,35,20,.45); backdrop-filter:blur(2px); padding:16px; }
+  #win { z-index:50; } #master { z-index:60; }
+  #win .card, #master .card { background:#fff; border-radius:22px; padding:26px; text-align:center; max-width:360px;
+    box-shadow:0 20px 60px rgba(0,0,0,.25); animation:pop .35s ease; }
+  @keyframes pop { from{transform:scale(.8);opacity:0;} to{transform:scale(1);opacity:1;} }
+  #win .score { font-size:30px; font-weight:900; color:var(--accent); margin:6px 0; }
+  #win h2, #master h2 { margin:4px 0; font-size:20px; }
+  #win .note, #master .note { margin:8px 0; color:#6f6757; font-size:14px; font-weight:800; line-height:1.5; }
+  #win .unlock { background:#eaf1ff; color:#2f57a8; border-radius:12px; padding:8px; margin:8px 0; font-weight:800; }
+  .winbtns { display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+  .winbtns .btn { padding:12px 18px; }
+  .star { position:fixed; top:-30px; font-size:24px; z-index:49; pointer-events:none; animation:fall linear forwards; }
+  @keyframes fall { to{ transform:translateY(105vh) rotate(360deg); opacity:0; } }
+
+  /* 부모(마스터) 모드 */
+  #master input { width:100%; box-sizing:border-box; border:2px solid var(--line-thin); border-radius:12px;
+    padding:12px; font-size:18px; font-weight:800; text-align:center; margin:6px 0; color:var(--ink); background:#fffdf8; }
+  #master input:focus { outline:none; border-color:var(--accent); }
+  #master .err { color:#c0392b; font-size:13px; font-weight:800; min-height:18px; margin:2px 0; }
+  .mtoggle { display:flex; align-items:center; justify-content:space-between; gap:8px;
+    border:2px solid var(--line-thin); border-radius:12px; padding:9px 12px; font-size:14px; font-weight:800; cursor:pointer; background:#fff; }
+  .mtoggle .sw { border-radius:999px; padding:3px 10px; font-size:12.5px; font-weight:900; }
+  .mtoggle .sw.on { background:var(--accent); color:#fff; }
+  .mtoggle .sw.off { background:#efe7d6; color:#9a917c; }
+  .mstep { display:flex; align-items:center; justify-content:space-between; gap:8px;
+    border:2px solid var(--line-thin); border-radius:12px; padding:7px 10px; font-size:14px; font-weight:800; background:#fff; }
+  .mstep .sgrp { display:flex; align-items:center; gap:10px; }
+  .mstep button { width:32px; height:32px; border-radius:9px; border:2px solid var(--line-thin); background:#fff; font-size:18px; font-weight:900; cursor:pointer; }
+  .master-badge { display:inline-flex; align-items:center; gap:6px; background:#eaf1ff; color:#2f57a8;
+    border:2px solid #c7d8ff; border-radius:999px; padding:5px 12px; font-size:12.5px; font-weight:800; cursor:pointer; margin:4px 0; }
+
+  /* 인쇄용 학습지 미리보기/출력 */
+  #printArea { display:none; width:100%; }
+  body.mode-print #printArea { display:block; margin-top:14px; }
+  .preview-hint { text-align:center; font-size:13px; color:var(--muted); font-weight:800; margin:6px 0 12px; }
+  .sheet { background:#fff; width:190mm; max-width:100%; margin:0 auto 16px; padding:9mm;
+    border:1px solid #e3ddd0; border-radius:6px; box-shadow:0 6px 20px rgba(120,100,60,.15); }
+  .sheet-head { display:flex; align-items:flex-end; justify-content:space-between; gap:8px;
+    border-bottom:2.5px solid #2b2b3a; padding-bottom:7px; }
+  .sheet-brand { display:flex; align-items:center; gap:9px; }
+  .sheet-logo { background:#2b2b3a; color:#fff; font-weight:900; border-radius:8px; padding:5px 9px; font-size:12.5px; line-height:1.15; text-align:center; }
+  .sheet-title { font-size:21px; font-weight:900; }
+  .sheet-sub { font-size:12.5px; color:#6f6757; font-weight:800; }
+  .sheet-meta { font-size:13px; font-weight:800; color:#2b2b3a; text-align:right; white-space:nowrap; }
+  .ul { display:inline-block; min-width:30px; border-bottom:1.6px solid #2b2b3a; }
+  .ul.nm { min-width:62px; }
+  .sheet-pageno { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px;
+    border-radius:50%; background:#2b2b3a; color:#fff; font-weight:900; font-size:13px; margin-left:8px; vertical-align:middle; }
+  .sheet-instr { margin:11px 0 4px; font-size:14px; font-weight:800; }
+  .sheet-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px 8px; }
+  .sheet-cell { padding:4px 2px; }
+  .sheet-foot { margin-top:10px; text-align:center; font-size:10px; color:#b3ab98; }
+
+  /* ===== 가로(태블릿) 레이아웃 ===== */
+  @media (min-width:820px) and (orientation:landscape) {
+    :root { --bw: min(46vh, 42vw, 480px); --panel: 100%; }
+    body { display:flex; flex-direction:column; justify-content:flex-start; }
+    .layout { flex-direction:row; align-items:flex-start; justify-content:center; gap:24px; max-width:1500px; margin:0 auto; }
+    .sidebar { width:360px; flex:0 0 360px; align-items:stretch; }
+    .strip, .controls, .progress, .popt, .summary, .calnav, #calGrid { margin-left:0; margin-right:0; }
+    .main { flex:0 0 auto; width:auto; min-width:0; }
+    .sidebar h1 { font-size:30px; }
+    .sidebar .tab { font-size:15px; padding:8px 16px; }
+    .sidebar .strip { font-size:16px; padding:11px 16px; }
+    .sidebar .mission { font-size:14.5px; }
+    .sidebar .label { font-size:15px; width:auto; }
+    .sidebar .pill { font-size:14.5px; padding:8px 14px; }
+    .sidebar .ptext { font-size:14.5px; }
+    body.mode-print .layout { display:block; }
+  }
+
+  /* ===== 인쇄 ===== */
+  @media print {
+    @page { size:A4 portrait; margin:10mm; }
+    body { background:#fff !important; padding:0 !important; }
+    body > *:not(#printArea) { display:none !important; }
+    #printArea { display:block !important; margin:0 !important; }
+    .preview-hint { display:none !important; }
+    .sheet { width:auto; max-width:none; margin:0; padding:0 0 4mm; border:none; border-radius:0; box-shadow:none; page-break-after:always; break-after:page; }
+    .sheet:last-child { page-break-after:auto; break-after:auto; }
+  }
+</style>
+
+<div class="layout">
+  <aside class="sidebar">
+    <header>
+      <h1>별 <span class="comet">⭐</span> 수가르기</h1>
+      <div class="tabs">
+        <button class="tab on" id="tabPlay">🧮 풀기</button>
+        <button class="tab" id="tabPrint">🖨️ 출력</button>
+        <button class="tab" id="tabHist">📅 기록</button>
+      </div>
+    </header>
+
+    <div class="strip">
+      <div class="stats" id="stats">—</div>
+      <div class="mission play-only" id="mission">—</div>
+    </div>
+
+    <div class="controls play-only">
+      <div class="rowc"><span class="label">단계</span><span id="stageRow" class="rowc" style="gap:5px"></span></div>
+    </div>
+    <div class="progress play-only">
+      <div class="ptext" id="ptext"></div>
+      <div class="pbar"><div class="pfill" id="pfill" style="width:0%"></div></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- 풀기 -->
+    <div class="pane play-only">
+      <div id="bondHost" class="bondHost"></div>
+      <div class="pad" id="pad"></div>
+      <div class="status" id="status"></div>
+      <div class="actions">
+        <button class="btn ghost" id="skipBtn">다른 문제 🔄</button>
+      </div>
+    </div>
+
+    <!-- 출력 -->
+    <div class="pane print-only">
+      <div class="popt">
+        <div class="poptrow"><span class="plabel">유형</span><span class="rowc" id="prTypeRow"></span></div>
+        <div class="poptrow"><span class="plabel">단계</span><span class="rowc" id="prStageRow"></span></div>
+        <div class="poptrow"><span class="plabel">쪽수</span>
+          <span class="stepper"><button id="prPgMinus">−</button><span id="prPages">2</span><button id="prPgPlus">+</button></span>
+          <span style="font-size:12.5px;color:var(--muted);font-weight:800">(한 장에 9문제)</span></div>
+        <label class="pcheck"><input type="checkbox" id="prAns"> 정답지도 함께 만들기</label>
+        <div class="actions">
+          <button class="btn new" id="prMake">미리보기 만들기 ✏️</button>
+          <button class="btn hintc" id="prPrint" disabled>인쇄 / PDF 저장 🖨️</button>
+        </div>
+        <div class="status" id="prNote">옵션을 고르고 “미리보기 만들기”를 누르면 아래에 문제지가 나와요.</div>
+      </div>
+    </div>
+
+    <!-- 기록 -->
+    <div class="pane history-only">
+      <div class="summary">
+        <div class="scard"><div class="v" id="sDays">0</div><div class="k">완료한 날</div></div>
+        <div class="scard"><div class="v" id="sStreak">0</div><div class="k">🔥 현재 연속</div></div>
+        <div class="scard"><div class="v" id="sBest">0</div><div class="k">🏆 최고 연속</div></div>
+        <div class="scard"><div class="v" id="sSolved">0</div><div class="k">⭐ 푼 문제</div></div>
+        <div class="scard"><div class="v" id="sScore">0</div><div class="k">💯 총점</div></div>
+        <div class="scard"><div class="v" id="sToday">0/10</div><div class="k">오늘</div></div>
+      </div>
+      <div class="calnav">
+        <button id="calPrev">‹</button>
+        <div class="title" id="calTitle">—</div>
+        <button id="calNext">›</button>
+      </div>
+      <div id="calGrid"></div>
+      <div class="status" id="histNote" style="width:var(--panel)">오늘의 미션을 끝낸 날에 도장이 찍혀요 ⭐</div>
+    </div>
+  </main>
+</div>
+
+<div id="printArea"></div>
+
+<div id="win">
+  <div class="card">
+    <div style="font-size:42px">🌟</div>
+    <div class="score" id="winScore">+100점</div>
+    <h2 id="winTitle">잘했어요!</h2>
+    <div class="note" id="winNote"></div>
+    <div id="winUnlock"></div>
+    <div class="winbtns" id="winBtns"></div>
+  </div>
+</div>
+
+<div id="master">
+  <div class="card">
+    <div style="font-size:36px">🔐</div>
+    <h2 id="masterTitle">부모 모드</h2>
+    <div class="note" id="masterNote"></div>
+    <input type="password" id="masterPw1" inputmode="numeric" placeholder="비밀번호">
+    <input type="password" id="masterPw2" inputmode="numeric" placeholder="비밀번호 확인" style="display:none">
+    <div class="err" id="masterErr"></div>
+    <div class="winbtns" id="masterBtns"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ===== 1) 단계 정의 — 여기에 한 줄 추가하면 새 단계가 생깁니다 ===== */
+const STAGES = [
+  { key:"s5",  label:"5까지",  min:2,  max:5  },   // 입문
+  { key:"s9",  label:"9까지",  min:2,  max:9  },
+  { key:"t10", label:"10",     min:10, max:10 },   // 10의 보수(1학기 핵심)
+  { key:"s19", label:"십몇",   min:11, max:19 },   // 받아올림 준비
+  // 예) { key:"s20", label:"20까지", min:11, max:20 },
+];
+const POINTS = 100;                 // 한 문제당 점수
+const DEFAULTS = { split:true, merge:false, shuffle:false, dailyTarget:10, levelTarget:20 };
+
+/* ===== 2) 저장소 (배포=자동저장 / 미리보기=메모리 폴백) ===== */
+const Store = (() => {
+  let mem={}, ok=false;
+  try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); ok=true; } catch(e){ ok=false; }
+  return {
+    get(k){ try { return ok?localStorage.getItem(k):(k in mem?mem[k]:null); } catch(e){ return (k in mem)?mem[k]:null; } },
+    set(k,v){ try { ok?localStorage.setItem(k,v):(mem[k]=v); } catch(e){ mem[k]=v; } },
+  };
+})();
+const KEY="byeolsugarugi_save_v1";
+function dstr(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function today(){ return dstr(new Date()); }
+function yesterday(){ const d=new Date(); d.setDate(d.getDate()-1); return dstr(d); }
+
+let save;
+function loadSave(){
+  let s=null; try { s=JSON.parse(Store.get(KEY)); } catch(e){ s=null; }
+  if(!s||typeof s!=="object") s={};
+  save=Object.assign({ maxLevel:0, stars:{}, score:0, streak:0, bestStreak:0, lastMissionDate:"", days:{}, masterPw:"", settings:{} }, s);
+  save.settings=Object.assign({}, DEFAULTS, save.settings||{});
+  if(save.lastMissionDate && save.lastMissionDate!==today() && save.lastMissionDate!==yesterday()) save.streak=0;
+  persist();
+}
+function persist(){ Store.set(KEY, JSON.stringify(save)); }
+const dailyTarget=()=>save.settings.dailyTarget;
+const levelTarget=()=>save.settings.levelTarget;
+
+/* ===== 3) 문제 생성 (수 가르기/모으기) ===== */
+const $=s=>document.querySelector(s);
+function randInt(a,b){ return a+Math.floor(Math.random()*(b-a+1)); }
+// 한 문제 = { W, A, B, style:'split'|'merge', blank:'top'|'left'|'right' }
+function makeProblem(stage, opt, prev){
+  for(let tries=0; tries<40; tries++){
+    const W = Math.max(2, randInt(stage.min, stage.max));
+    const A = randInt(1, W-1), B = W - A;           // 부분은 1 이상 (학습지처럼 0 미사용)
+    const styles=[]; if(opt.split) styles.push("split"); if(opt.merge) styles.push("merge");
+    if(!styles.length) styles.push("split");
+    const style = styles[randInt(0,styles.length-1)];
+    let blank;
+    if(style==="merge") blank="top";                                  // 모으기: 위(합)를 비움
+    else blank = opt.shuffle ? (Math.random()<0.5?"left":"right") : "left"; // 가르기: 한 부분을 비움
+    const p={W,A,B,style,blank};
+    if(prev && prev.W===W && prev.style===style && prev.blank===blank && prev.A===A) continue; // 직전과 동일 회피
+    return p;
+  }
+  const W=Math.max(2,randInt(stage.min,stage.max)), A=randInt(1,W-1);
+  return {W,A,B:W-A,style:opt.split?"split":"merge",blank:opt.split?"left":"top"};
+}
+const answerOf=p=> p.blank==="top"?p.W : p.blank==="left"?p.A : p.B;
+
+/* ===== 4) 다이어그램 SVG ===== */
+const SVGNS="http://www.w3.org/2000/svg";
+let bondSeq=0;
+const BOX={ top:{x:113,y:14}, left:{x:41,y:158}, right:{x:185,y:158}, w:74, h:64 };
+function el(name,attrs){ const e=document.createElementNS(SVGNS,name); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+// opt: { mode:'play'|'print'|'answer', value:(num|null), state:('ok'|'bad'|null) }
+function bondSVG(p, opt){
+  opt=opt||{}; const mode=opt.mode||"play";
+  const print=(mode==="print"||mode==="answer");
+  const ink   = print? "#111" : "#2b2b3a";
+  const line  = print? "#111" : "#7d7563";
+  const stroke= print? 2.2    : 3.2;
+  const id="ar"+(bondSeq++);
+  const svg=el("svg",{viewBox:"0 0 300 236", class:"bond"});
+  const defs=el("defs",{}); const mk=el("marker",{id:id, viewBox:"0 0 10 10", refX:"8.5", refY:"5",
+    markerWidth:"7.5", markerHeight:"7.5", orient:"auto"});
+  mk.appendChild(el("path",{d:"M0,0 L10,5 L0,10 z", fill:"context-stroke"})); defs.appendChild(mk); svg.appendChild(defs);
+
+  // 화살표 (박스보다 먼저 그려 박스 아래에)
+  const arrowCol = print? "#111" : "#b9912f";
+  function arrow(x1,y1,x2,y2){ svg.appendChild(el("line",{x1,y1,x2,y2, stroke:arrowCol, "stroke-width":print?2:2.6,
+    "stroke-linecap":"round", "marker-end":"url(#"+id+")"})); }
+  if(p.style==="merge"){ arrow(82,150,142,86); arrow(218,150,158,86); }     // 아래 두 칸 → 위
+  else { arrow(150,82,86,150); arrow(150,82,214,150); }                     // 위 → 아래 두 칸
+
+  const vals={ top:p.W, left:p.A, right:p.B };
+  const centers={ top:[150,46], left:[78,190], right:[222,190] };
+  ["top","left","right"].forEach(pos=>{
+    const b=BOX[pos], isBlank=(p.blank===pos);
+    let fill="#fff", st=line, sw=stroke, pulse=false, num=null, numCol=ink;
+    if(isBlank){
+      if(mode==="play"){
+        st=opt.state==="ok"?"#1f8a6d":opt.state==="bad"?"#d6453a":"#f6a623"; sw=3.8;
+        fill=opt.state==="ok"?"#e3f6ee":opt.state==="bad"?"#ffe3e0":"#fff7e6";
+        if(opt.state==null) pulse=true;
+        if(opt.value!=null){ num=opt.value; numCol=opt.state==="bad"?"#d6453a":"#1f8a6d"; }
+      } else if(mode==="answer"){ fill="#eef4ff"; num=vals[pos]; numCol="#3f6fd1"; }
+      // print: 빈칸은 비워둠
+    } else { num=vals[pos]; }
+    const r=el("rect",{x:b.x,y:b.y,width:b.w,height:b.h,rx:9,ry:9, fill:fill, stroke:st, "stroke-width":sw});
+    if(pulse) r.setAttribute("class","blankpulse");
+    svg.appendChild(r);
+    if(num!=null){
+      const fs=String(num).length>=2?30:38;
+      const t=el("text",{x:centers[pos][0], y:centers[pos][1]+1, "text-anchor":"middle",
+        "dominant-baseline":"central", "font-size":fs, fill:numCol});
+      t.textContent=num; svg.appendChild(t);
+    }
+  });
+  return svg;
+}
+
+/* ===== 5) 풀기 모드 ===== */
+const ui={ level:0, problem:null, value:null, answered:false };
+const statusEl=$("#status"), bondHost=$("#bondHost"), padEl=$("#pad");
+let masterOn=false;
+const encPw=p=>btoa(unescape(encodeURIComponent(p)));
+const hasMasterPw=()=>!!save.masterPw;
+const checkPw=p=>save.masterPw===encPw(p);
+
+function newProblem(){
+  ui.problem=makeProblem(STAGES[ui.level], save.settings, ui.problem);
+  ui.value=null; ui.answered=false;
+  renderPlayBond(); buildPad(); renderMeta(); statusEl.textContent="□ 안에 알맞은 수를 골라요 👇";
+}
+function renderPlayBond(){
+  bondHost.innerHTML="";
+  bondHost.appendChild(bondSVG(ui.problem,{mode:"play", value:ui.value, state:ui.answered?"ok":(ui._bad?"bad":null)}));
+}
+function buildPad(){
+  const max=STAGES[ui.level].max, cols=Math.min(max,5);
+  padEl.style.gridTemplateColumns=`repeat(${cols},1fr)`; padEl.innerHTML="";
+  for(let n=1;n<=max;n++){ const b=document.createElement("button"); b.className="num"; b.textContent=n; b.dataset.n=n; b.onclick=()=>tapNum(n,b); padEl.appendChild(b); }
+}
+function tapNum(n, btn){
+  if(ui.answered) return;
+  ui.value=n; ui._bad=false; renderPlayBond();
+  if(n===answerOf(ui.problem)){ ui.answered=true; onCorrect(); }
+  else {
+    ui._bad=true; renderPlayBond(); if(btn){ btn.classList.add("bad"); setTimeout(()=>btn.classList.remove("bad"),550); }
+    statusEl.textContent="앗, 다시 한 번 세어볼까요? 🙂";
+    setTimeout(()=>{ if(!ui.answered){ ui.value=null; ui._bad=false; renderPlayBond(); } },650);
+  }
+}
+function onCorrect(){
+  burstStars(12);
+  if(masterOn){ statusEl.textContent="부모 모드: 정답! 잘했어요 🔓 (기록에는 저장 안 돼요)"; setTimeout(newProblem,1000); return; }
+  const r=recordSolve(); renderMeta();
+  if(r.missionDone||r.leveledUp||r.allDone){ showWin(r); }
+  else { statusEl.textContent="정답이에요! 🎉 다음 문제로 가요"; setTimeout(newProblem,1000); }
+}
+function recordSolve(){
+  save.score+=POINTS;
+  const lv=ui.level; save.stars[lv]=(save.stars[lv]||0)+1;
+  const t=today(); save.days[t]=(save.days[t]||0)+1; const tc=save.days[t];
+  let missionDone=false;
+  if(save.lastMissionDate!==t && tc>=dailyTarget()){
+    save.streak=(save.lastMissionDate===yesterday())?save.streak+1:1;
+    if(save.streak>save.bestStreak) save.bestStreak=save.streak;
+    save.lastMissionDate=t; missionDone=true;
+  }
+  let leveledUp=false, allDone=false;
+  if(lv===save.maxLevel && save.stars[lv]>=levelTarget()){
+    if(save.maxLevel<STAGES.length-1){ save.maxLevel++; leveledUp=true; }
+    else allDone=true;
+  }
+  persist();
+  return {tc,missionDone,leveledUp,allDone};
+}
+
+/* ===== 6) 상단 정보 + 단계 선택 + 진행도 ===== */
+function totalSolved(){ return Object.values(save.stars).reduce((a,b)=>a+(b||0),0); }
+function todayCount(){ return save.days[today()]||0; }
+function renderMeta(){ renderStrip(); renderStages(); renderProgress(); }
+function renderStrip(){
+  $("#stats").textContent=`⭐ ${totalSolved()}개  ·  🔥 ${save.streak}일 연속  ·  💯 ${save.score.toLocaleString()}점`;
+  const m=$("#mission");
+  if(save.lastMissionDate===today()){ m.className="mission done"; m.textContent="오늘의 미션 완료! 🎉 (더 풀어도 좋아요)"; }
+  else { m.className="mission"; m.textContent=`오늘의 미션: ${dailyTarget()}문제 (${todayCount()}/${dailyTarget()}) ✏️`; }
+  const old=$("#masterBadge"); if(old) old.remove();
+  if(masterOn){ const bd=document.createElement("div"); bd.id="masterBadge"; bd.className="master-badge"; bd.textContent="🔓 부모 모드 (열기)"; bd.onclick=openMaster; m.parentNode.appendChild(bd); }
+}
+function renderStages(){
+  const sr=$("#stageRow"); sr.innerHTML="";
+  STAGES.forEach((st,si)=>{
+    const unlocked=masterOn||si<=save.maxLevel;
+    const b=document.createElement("button");
+    b.className="pill"+(si===ui.level?" on":"")+(unlocked?"":" locked");
+    b.textContent=unlocked?st.label:st.label+" 🔒";
+    b.onclick=()=>{ if(!unlocked){ statusEl.textContent="앞 단계를 끝내면 열려요! 🔒"; return; } ui.level=si; newProblem(); };
+    sr.appendChild(b);
+  });
+}
+function renderProgress(){
+  const cnt=Math.min(save.stars[ui.level]||0, levelTarget());
+  $("#ptext").textContent=`${STAGES[ui.level].label} 단계 — ${cnt} / ${levelTarget()}문제 (다 풀면 다음이 열려요)`;
+  $("#pfill").style.width=(cnt/levelTarget()*100)+"%";
+}
+
+/* ===== 7) 축하 모달 + 별비 ===== */
+function addWBtn(box,label,kind,fn){ const b=document.createElement("button"); b.className="btn "+kind; b.textContent=label; b.onclick=fn; box.appendChild(b); }
+function showWin(r){
+  $("#winScore").textContent="+"+POINTS+"점";
+  $("#winTitle").textContent = r.allDone?"모든 단계 완료! 🏆" : r.leveledUp?"새 단계가 열렸어요! 🎉" : "오늘의 미션 완료! 🔥";
+  let note=`지금까지 ⭐ ${totalSolved()}개 · 💯 ${save.score.toLocaleString()}점`;
+  if(r.missionDone) note+=`<br><b>오늘의 미션 완료! 🔥 ${save.streak}일 연속</b>`;
+  $("#winNote").innerHTML=note;
+  const u=$("#winUnlock"); u.innerHTML="";
+  if(r.allDone) u.innerHTML=`<div class="unlock">🏆 모든 단계를 끝냈어요! 정말 최고예요!</div>`;
+  else if(r.leveledUp) u.innerHTML=`<div class="unlock">🔓 새 단계가 열렸어요: <b>${STAGES[save.maxLevel].label}</b>!</div>`;
+  const b=$("#winBtns"); b.innerHTML="";
+  if(r.leveledUp) addWBtn(b,"새 단계 도전! 🚀","new",()=>{ closeWin(); ui.level=save.maxLevel; newProblem(); });
+  if(r.missionDone) addWBtn(b,"📅 도장 보기","new",()=>{ closeWin(); navTo("history"); });
+  addWBtn(b,"계속 풀기 ✏️","new",()=>{ closeWin(); newProblem(); });
+  addWBtn(b,"그만하기","ghost",closeWin);
+  rainStars(24); $("#win").style.display="flex";
+}
+function closeWin(){ $("#win").style.display="none"; }
+function rainStars(count){ const e=["⭐","🌟","✨","☄️","💫"];
+  for(let i=0;i<(count||24);i++){ const s=document.createElement("div"); s.className="star"; s.textContent=e[i%e.length];
+    s.style.left=Math.random()*100+"vw"; s.style.animationDuration=(1.6+Math.random()*1.4)+"s"; s.style.animationDelay=(Math.random()*0.4)+"s";
+    document.body.appendChild(s); setTimeout(()=>s.remove(),3500); } }
+function burstStars(count){ rainStars(count||10); }
+
+/* ===== 8) 화면 전환 + 기록(도장판) ===== */
+let calY, calM;
+function navTo(name){
+  document.body.classList.remove("mode-play","mode-print","mode-history");
+  document.body.classList.add("mode-"+name);
+  $("#tabPlay").classList.toggle("on",name==="play");
+  $("#tabPrint").classList.toggle("on",name==="print");
+  $("#tabHist").classList.toggle("on",name==="history");
+  if(name==="history"){ const d=new Date(); calY=d.getFullYear(); calM=d.getMonth(); renderHistory(); }
+}
+function renderHistory(){
+  const days=save.days||{};
+  $("#sDays").textContent=Object.keys(days).filter(d=>days[d]>=dailyTarget()).length;
+  $("#sStreak").textContent=save.streak;
+  $("#sBest").textContent=save.bestStreak;
+  $("#sSolved").textContent=totalSolved();
+  $("#sScore").textContent=save.score.toLocaleString();
+  $("#sToday").textContent=`${todayCount()}/${dailyTarget()}`;
+  renderCalendar();
+}
+function renderCalendar(){
+  $("#calTitle").textContent=`${calY}년 ${calM+1}월`;
+  const grid=$("#calGrid"); grid.innerHTML="";
+  ["일","월","화","수","목","금","토"].forEach((w,i)=>{ const h=document.createElement("div"); h.className="cal-h"+(i===0?" sun":i===6?" sat":""); h.textContent=w; grid.appendChild(h); });
+  const first=new Date(calY,calM,1).getDay(), n=new Date(calY,calM+1,0).getDate(), t=today();
+  for(let i=0;i<first;i++){ const e=document.createElement("div"); e.className="cal-cell empty"; grid.appendChild(e); }
+  for(let d=1;d<=n;d++){
+    const ds=`${calY}-${String(calM+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const cnt=save.days[ds]||0, done=cnt>=dailyTarget();
+    const cell=document.createElement("div"); cell.className="cal-cell"+(ds===t?" today":"");
+    const num=document.createElement("div"); num.className="cal-num"; num.textContent=d; cell.appendChild(num);
+    if(done){ const s=document.createElement("div"); s.className="stamp"; s.textContent="★"; cell.appendChild(s); }
+    else if(cnt>0){ const b=document.createElement("div"); b.className="cal-partial"; b.textContent=cnt+"/"+dailyTarget(); cell.appendChild(b); }
+    grid.appendChild(cell);
+  }
+}
+
+/* ===== 9) 출력(인쇄)용 학습지 ===== */
+const PR={ type:"split", stage:0, pages:2, ans:false };
+function prOptsForType(){
+  if(PR.type==="merge") return {split:false, merge:true,  shuffle:true};
+  if(PR.type==="mix")   return {split:true,  merge:true,  shuffle:true};
+  return {split:true, merge:false, shuffle:true};            // split(가르기): 좌/우 섞어 다양하게
+}
+function prSubtitle(){ return PR.type==="merge"?"수 모으기": PR.type==="mix"?"수 가르기 · 모으기":"수 가르기"; }
+function renderPrintOptions(){
+  const tr=$("#prTypeRow"); tr.innerHTML="";
+  [["split","가르기"],["merge","모으기"],["mix","섞기"]].forEach(([k,l])=>{
+    const b=document.createElement("button"); b.className="pill"+(PR.type===k?" on":""); b.textContent=l;
+    b.onclick=()=>{ PR.type=k; renderPrintOptions(); }; tr.appendChild(b);
+  });
+  const stRow=$("#prStageRow"); stRow.innerHTML="";
+  STAGES.forEach((st,si)=>{ const b=document.createElement("button"); b.className="pill"+(PR.stage===si?" on":""); b.textContent=st.label;
+    b.onclick=()=>{ PR.stage=si; renderPrintOptions(); }; stRow.appendChild(b); });
+  const ball=document.createElement("button"); ball.className="pill"+(PR.stage==="all"?" on":""); ball.textContent="섞기";
+  ball.onclick=()=>{ PR.stage="all"; renderPrintOptions(); }; stRow.appendChild(ball);
+  $("#prPages").textContent=PR.pages;
+  $("#prAns").checked=PR.ans;
+}
+function ul(min){ return `<span class="ul" style="min-width:${min}px"></span>`; }
+function makeSheet(problems, pageNo, isAnswer){
+  const sheet=document.createElement("div"); sheet.className="sheet";
+  const head=document.createElement("div"); head.className="sheet-head";
+  head.innerHTML=`<div class="sheet-brand">
+      <div class="sheet-logo">별<br>수가르기</div>
+      <div><div class="sheet-title">수 가르기·모으기</div>
+      <div class="sheet-sub">${prSubtitle()}${isAnswer?" — 정답":""}</div></div>
+    </div>
+    <div class="sheet-meta">월 ${ul(26)} 일 ${ul(26)} &nbsp; 이름 <span class="ul nm"></span>
+      <span class="sheet-pageno">${pageNo}</span></div>`;
+  sheet.appendChild(head);
+  const instr=document.createElement("div"); instr.className="sheet-instr";
+  instr.textContent= isAnswer?"● 정답입니다." : "● □ 안에 알맞은 수를 쓰세요.";
+  sheet.appendChild(instr);
+  const grid=document.createElement("div"); grid.className="sheet-grid";
+  problems.forEach(p=>{ const c=document.createElement("div"); c.className="sheet-cell";
+    c.appendChild(bondSVG(p,{mode:isAnswer?"answer":"print"})); grid.appendChild(c); });
+  sheet.appendChild(grid);
+  const foot=document.createElement("div"); foot.className="sheet-foot"; foot.textContent="별 수가르기 — 우리 딸 전용 학습지 ⭐";
+  sheet.appendChild(foot);
+  return sheet;
+}
+function buildWorksheet(){
+  const area=$("#printArea"); area.innerHTML="";
+  const hint=document.createElement("div"); hint.className="preview-hint";
+  hint.textContent="↓ 미리보기입니다. ‘인쇄 / PDF 저장’을 누르면 이 문제지가 인쇄돼요.";
+  area.appendChild(hint);
+  const opt=prOptsForType();
+  const pages=[]; let prev=null;
+  for(let pg=0; pg<PR.pages; pg++){
+    const probs=[];
+    for(let i=0;i<9;i++){
+      const stage = PR.stage==="all" ? STAGES[randInt(0,STAGES.length-1)] : STAGES[PR.stage];
+      prev=makeProblem(stage, opt, prev); probs.push(prev);
+    }
+    pages.push(probs);
+  }
+  pages.forEach((probs,i)=>area.appendChild(makeSheet(probs, i+1, false)));
+  if(PR.ans) pages.forEach((probs,i)=>area.appendChild(makeSheet(probs, i+1, true)));
+  $("#prPrint").disabled=false;
+  $("#prNote").textContent=`미리보기 완성! ${PR.pages}장${PR.ans?" (+정답지 "+PR.pages+"장)":""} · 모두 ${PR.pages*9}문제`;
+}
+
+/* ===== 10) 부모(마스터) 모드 — 난이도/유형 조절 ===== */
+let _mTimer=null, _resetArmed=false;
+function addMBtn(box,label,kind,fn){ const b=document.createElement("button"); b.className="btn "+kind; b.textContent=label; b.onclick=fn; box.appendChild(b); }
+function _mView(){ _resetArmed=false; $("#masterErr").textContent=""; const p1=$("#masterPw1"),p2=$("#masterPw2"); p1.value=""; p2.value="";
+  $("#masterBtns").innerHTML=""; return {t:$("#masterTitle"),nt:$("#masterNote"),p1,p2,btns:$("#masterBtns")}; }
+function openMaster(){ $("#master").style.display="flex"; if(masterOn) mMenu(); else if(!hasMasterPw()) mCreate(); else mInput(); }
+function closeMaster(){ $("#master").style.display="none"; }
+
+function addToggle(box,label,on,fn){
+  const d=document.createElement("div"); d.className="mtoggle";
+  d.innerHTML=`<span>${label}</span><span class="sw ${on?"on":"off"}">${on?"켬":"끔"}</span>`;
+  d.onclick=fn; box.appendChild(d);
+}
+function addStepper(box,label,val,onMinus,onPlus){
+  const d=document.createElement("div"); d.className="mstep";
+  d.innerHTML=`<span>${label}</span><span class="sgrp"><button>−</button><b>${val}</b><button>＋</button></span>`;
+  const bs=d.querySelectorAll("button"); bs[0].onclick=onMinus; bs[1].onclick=onPlus; box.appendChild(d);
+}
+function mMenu(){
+  const {t,nt,p1,p2,btns}=_mView();
+  t.textContent="부모 모드 🔓";
+  nt.innerHTML=`아이 난이도를 조절할 수 있어요.<br>지금 화면: <b>${STAGES[ui.level].label}</b> 단계`;
+  p1.style.display="none"; p2.style.display="none";
+  const s=save.settings;
+  addToggle(btns,"수 가르기", s.split, ()=>{ s.split=!s.split; if(!s.split&&!s.merge) s.split=true; persist(); newProblem(); mMenu(); });
+  addToggle(btns,"수 모으기", s.merge, ()=>{ s.merge=!s.merge; if(!s.split&&!s.merge) s.split=true; persist(); newProblem(); mMenu(); });
+  addToggle(btns,"빈칸 위치 섞기", s.shuffle, ()=>{ s.shuffle=!s.shuffle; persist(); newProblem(); mMenu(); });
+  addStepper(btns,"오늘의 미션 수", s.dailyTarget,
+    ()=>{ s.dailyTarget=Math.max(1,s.dailyTarget-1); persist(); renderMeta(); mMenu(); },
+    ()=>{ s.dailyTarget=Math.min(50,s.dailyTarget+1); persist(); renderMeta(); mMenu(); });
+  addStepper(btns,"단계 통과 문제 수", s.levelTarget,
+    ()=>{ s.levelTarget=Math.max(5,s.levelTarget-5); persist(); renderProgress(); mMenu(); },
+    ()=>{ s.levelTarget=Math.min(100,s.levelTarget+5); persist(); renderProgress(); mMenu(); });
+  addMBtn(btns,`여기까지 열어주기 (${STAGES[ui.level].label})`,"new",openUpTo);
+  addMBtn(btns,"부모 모드 끄기","new",toggleMasterOff);
+  addMBtn(btns,"비밀번호 변경","ghost",mChange);
+  addMBtn(btns,"닫기","ghost",closeMaster);
+}
+function mInput(){
+  const {t,nt,p1,p2,btns}=_mView();
+  t.textContent="부모 비밀번호 입력"; nt.textContent="비밀번호를 입력하면 모든 단계와 설정이 열려요.";
+  p1.style.display=""; p2.style.display="none"; p1.placeholder="비밀번호";
+  addMBtn(btns,"확인","new",submitMaster); addMBtn(btns,"비밀번호 초기화","ghost",resetPw); addMBtn(btns,"취소","ghost",closeMaster);
+  setTimeout(()=>p1.focus(),50);
+}
+function mCreate(){
+  const {t,nt,p1,p2,btns}=_mView();
+  t.textContent="부모 비밀번호 만들기"; nt.textContent="부모가 난이도를 조절할 수 있어요. 4자리 이상 추천.";
+  p1.style.display=""; p2.style.display=""; p1.placeholder="새 비밀번호"; p2.placeholder="비밀번호 확인";
+  addMBtn(btns,"만들기","new",()=>savePw(true)); addMBtn(btns,"취소","ghost",closeMaster);
+  setTimeout(()=>p1.focus(),50);
+}
+function mChange(){
+  const {t,nt,p1,p2,btns}=_mView();
+  t.textContent="비밀번호 변경"; nt.textContent="새 비밀번호를 정해 주세요. 4자리 이상 추천.";
+  p1.style.display=""; p2.style.display=""; p1.placeholder="새 비밀번호"; p2.placeholder="비밀번호 확인";
+  addMBtn(btns,"변경","new",()=>savePw(false)); addMBtn(btns,"취소","ghost",mMenu);
+  setTimeout(()=>p1.focus(),50);
+}
+function savePw(enable){
+  const a=$("#masterPw1").value.trim(), b=$("#masterPw2").value.trim();
+  if(a.length<4){ $("#masterErr").textContent="4자리 이상으로 정해 주세요."; return; }
+  if(a!==b){ $("#masterErr").textContent="두 비밀번호가 달라요."; return; }
+  save.masterPw=encPw(a); persist(); if(enable) masterOn=true;
+  closeMaster(); renderMeta(); statusEl.textContent=enable?"부모 모드가 켜졌어요 🔓":"비밀번호를 바꿨어요 ✅";
+}
+function submitMaster(){
+  if(!checkPw($("#masterPw1").value.trim())){ $("#masterErr").textContent="비밀번호가 틀렸어요."; return; }
+  masterOn=true; closeMaster(); renderMeta(); statusEl.textContent="부모 모드가 켜졌어요 🔓";
+}
+function resetPw(){
+  if(!_resetArmed){ _resetArmed=true; $("#masterErr").textContent="한 번 더 누르면 비밀번호를 지워요(점수·도장은 유지)."; return; }
+  save.masterPw=""; persist(); mCreate();
+}
+function openUpTo(){
+  if(ui.level>save.maxLevel){ save.maxLevel=ui.level; persist(); }
+  closeMaster(); renderMeta(); statusEl.textContent=`이제 아이가 [${STAGES[ui.level].label}] 단계까지 풀 수 있어요 🔓`;
+}
+function toggleMasterOff(){
+  masterOn=false; closeMaster();
+  if(ui.level>save.maxLevel){ ui.level=save.maxLevel; newProblem(); } else renderMeta();
+  statusEl.textContent="부모 모드가 꺼졌어요.";
+}
+function bindLongPress(el,fn,ms){
+  const start=()=>{ clearTimeout(_mTimer); _mTimer=setTimeout(fn,ms||800); };
+  const cancel=()=>clearTimeout(_mTimer);
+  el.addEventListener("touchstart",start,{passive:true}); el.addEventListener("touchend",cancel);
+  el.addEventListener("touchmove",cancel); el.addEventListener("touchcancel",cancel);
+  el.addEventListener("mousedown",start); el.addEventListener("mouseup",cancel); el.addEventListener("mouseleave",cancel);
+  el.addEventListener("contextmenu",e=>e.preventDefault());
+}
+
+/* ===== 11) 시작 ===== */
+$("#tabPlay").onclick=()=>navTo("play");
+$("#tabPrint").onclick=()=>{ navTo("print"); renderPrintOptions(); };
+$("#tabHist").onclick=()=>navTo("history");
+$("#skipBtn").onclick=newProblem;
+$("#calPrev").onclick=()=>{ calM--; if(calM<0){ calM=11; calY--; } renderCalendar(); };
+$("#calNext").onclick=()=>{ calM++; if(calM>11){ calM=0; calY++; } renderCalendar(); };
+$("#prPgMinus").onclick=()=>{ PR.pages=Math.max(1,PR.pages-1); renderPrintOptions(); };
+$("#prPgPlus").onclick=()=>{ PR.pages=Math.min(10,PR.pages+1); renderPrintOptions(); };
+$("#prAns").onchange=e=>{ PR.ans=e.target.checked; };
+$("#prMake").onclick=buildWorksheet;
+$("#prPrint").onclick=()=>window.print();
+bindLongPress($("h1"),openMaster,800);
+
+document.body.classList.add("mode-play");
+loadSave();
+ui.level=save.maxLevel;
+newProblem();
+</script>
+
+<script>
+/* PWA 서비스워커 등록 (오프라인 실행용) */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  });
+}
+</script>
