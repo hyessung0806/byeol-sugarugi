@@ -77,6 +77,7 @@
     display:flex; align-items:center; justify-content:center; transition:transform .05s, background .12s; }
   .key:active { transform:scale(.92); background:#fff3d6; }
   .key.del { font-size:17px; color:#9a6b16; background:#ffe9bf; border-color:#f4d9a3; }
+  .key.enter { font-size:18px; color:#fff; background:var(--accent-2); border-color:var(--accent-2); }
 
   .actions { display:flex; gap:8px; width:var(--bw); margin-top:10px; }
   .btn { flex:1; border:none; border-radius:12px; padding:12px 0; font-size:15px; font-weight:800; cursor:pointer; transition:transform .05s; }
@@ -227,6 +228,7 @@
 
     <div class="controls play-only">
       <div class="rowc"><span class="label">단계</span><span id="stageRow" class="rowc" style="gap:5px"></span></div>
+      <div class="rowc"><span class="label">유형</span><span id="typeRow" class="rowc" style="gap:5px"></span></div>
     </div>
     <div class="progress play-only">
       <div class="ptext" id="ptext"></div>
@@ -319,7 +321,7 @@ const STAGES = [
   // 더 늘리려면 한 줄 추가. 예) { key:"s50", label:"50까지", min:2, max:50 },
 ];
 const POINTS = 100;                 // 한 문제당 점수
-const DEFAULTS = { split:true, merge:false, shuffle:false, dailyTarget:10, levelTarget:20 };
+const DEFAULTS = { type:"split", dailyTarget:10, levelTarget:20 };   // type: split(가르기)|merge(모으기)|mix(섞기)
 
 /* ===== 2) 저장소 (배포=자동저장 / 미리보기=메모리 폴백) ===== */
 const Store = (() => {
@@ -340,7 +342,11 @@ function loadSave(){
   let s=null; try { s=JSON.parse(Store.get(KEY)); } catch(e){ s=null; }
   if(!s||typeof s!=="object") s={};
   save=Object.assign({ maxLevel:0, stars:{}, score:0, streak:0, bestStreak:0, lastMissionDate:"", days:{}, masterPw:"", settings:{} }, s);
-  save.settings=Object.assign({}, DEFAULTS, save.settings||{});
+  const raw = save.settings || {};
+  if(raw.type===undefined && (raw.split!==undefined || raw.merge!==undefined))   // 옛 booleans → type 마이그레이션
+    raw.type = (raw.split && raw.merge) ? "mix" : raw.merge ? "merge" : "split";
+  save.settings=Object.assign({}, DEFAULTS, raw);
+  if(!["split","merge","mix"].includes(save.settings.type)) save.settings.type="split";
   if(save.maxLevel>STAGES.length-1) save.maxLevel=STAGES.length-1;   // 단계 수 변경 대비 클램프
   if(save.maxLevel<0) save.maxLevel=0;
   if(save.lastMissionDate && save.lastMissionDate!==today() && save.lastMissionDate!==yesterday()) save.streak=0;
@@ -372,6 +378,11 @@ function makeProblem(stage, opt, prev){
   return {W,A,B:W-A,style:opt.split?"split":"merge",blank:opt.split?"left":"top"};
 }
 const answerOf=p=> p.blank==="top"?p.W : p.blank==="left"?p.A : p.B;
+function optsForType(t){   // 유형 → 생성 옵션
+  if(t==="merge") return {split:false, merge:true,  shuffle:false};
+  if(t==="mix")   return {split:true,  merge:true,  shuffle:true};
+  return {split:true, merge:false, shuffle:true};   // split(가르기): 빈칸 좌/우 섞어 다양하게
+}
 
 /* ===== 4) 다이어그램 SVG ===== */
 const SVGNS="http://www.w3.org/2000/svg";
@@ -433,10 +444,10 @@ const encPw=p=>btoa(unescape(encodeURIComponent(p)));
 const hasMasterPw=()=>!!save.masterPw;
 const checkPw=p=>save.masterPw===encPw(p);
 
-const ASK="아래 숫자판으로 □에 답을 써요 ✍️";
+const ASK="숫자를 누른 뒤 ‘입력’을 눌러요 ✍️";
 function newProblem(){
   ui.level=Math.min(Math.max(0,ui.level),STAGES.length-1);   // 안전: 항상 유효한 단계
-  ui.problem=makeProblem(STAGES[ui.level], save.settings, ui.problem);
+  ui.problem=makeProblem(STAGES[ui.level], optsForType(save.settings.type), ui.problem);
   ui.entry=""; ui.answered=false; ui._bad=false;
   renderPlayBond(); renderMeta(); statusEl.textContent=ASK;
 }
@@ -447,11 +458,12 @@ function renderPlayBond(){
   if(!ui.answered){ const bl=svg.querySelector("rect.blankpulse");   // 빈 네모를 누르면 입력 초기화
     if(bl){ bl.style.cursor="pointer"; bl.addEventListener("click",()=>{ if(ui.answered) return; ui.entry=""; ui._bad=false; renderPlayBond(); statusEl.textContent=ASK; }); } }
 }
-function buildKeypad(){   // 0~9 + 지우기 (어떤 범위든 버튼 12개)
+function buildKeypad(){   // 1~9 / 지우기·0·입력 (어떤 범위든 버튼 12개)
   padEl.innerHTML="";
-  ["1","2","3","4","5","6","7","8","9","del","0"].forEach(k=>{
+  ["1","2","3","4","5","6","7","8","9","del","0","enter"].forEach(k=>{
     const b=document.createElement("button");
     if(k==="del"){ b.className="key del"; b.textContent="지우기"; b.onclick=()=>tapKey("del"); }
+    else if(k==="enter"){ b.className="key enter"; b.textContent="입력"; b.onclick=()=>tapKey("enter"); }
     else { b.className="key"; b.textContent=k; b.onclick=()=>tapKey(k); }
     padEl.appendChild(b);
   });
@@ -459,15 +471,18 @@ function buildKeypad(){   // 0~9 + 지우기 (어떤 범위든 버튼 12개)
 function tapKey(k){
   if(ui.answered) return;
   if(k==="del"){ ui.entry=ui.entry.slice(0,-1); ui._bad=false; renderPlayBond(); statusEl.textContent=ASK; return; }
-  const ans=String(answerOf(ui.problem)), next=ui.entry+k;
-  if(Number(next)===Number(ans)){ ui.entry=next; ui.answered=true; ui._bad=false; renderPlayBond(); onCorrect(); return; }
-  if(ans.startsWith(next)){   // 두 자리 답의 앞자리 — 다음 자리를 기다림
-    ui.entry=next; ui._bad=false; renderPlayBond(); statusEl.textContent="좋아요, 한 자리 더! ✍️"; return;
+  if(k==="enter"){ submitAnswer(); return; }
+  if(ui.entry.length>=2) return;   // 답은 최대 두 자리
+  ui.entry+=k; ui._bad=false; renderPlayBond();
+  statusEl.textContent="‘입력’을 누르면 확인해요 ✅";
+}
+function submitAnswer(){
+  if(ui.entry===""){ statusEl.textContent="먼저 숫자를 눌러 써요 ✍️"; return; }
+  if(Number(ui.entry)===answerOf(ui.problem)){ ui.answered=true; ui._bad=false; renderPlayBond(); onCorrect(); }
+  else {
+    ui._bad=true; renderPlayBond(); statusEl.textContent="앗, 다시 한 번 세어볼까요? 🙂";
+    setTimeout(()=>{ if(!ui.answered){ ui.entry=""; ui._bad=false; renderPlayBond(); statusEl.textContent=ASK; } },800);
   }
-  // 답이 될 수 없는 입력 → 바로 다시
-  ui.entry=next; ui._bad=true; renderPlayBond();
-  statusEl.textContent="앗, 다시 한 번 세어볼까요? 🙂";
-  setTimeout(()=>{ if(!ui.answered){ ui.entry=""; ui._bad=false; renderPlayBond(); statusEl.textContent=ASK; } },650);
 }
 function onCorrect(){
   burstStars(12);
@@ -498,7 +513,15 @@ function recordSolve(){
 /* ===== 6) 상단 정보 + 단계 선택 + 진행도 ===== */
 function totalSolved(){ return Object.values(save.stars).reduce((a,b)=>a+(b||0),0); }
 function todayCount(){ return save.days[today()]||0; }
-function renderMeta(){ renderStrip(); renderStages(); renderProgress(); }
+function renderMeta(){ renderStrip(); renderStages(); renderTypes(); renderProgress(); }
+function renderTypes(){
+  const tr=$("#typeRow"); tr.innerHTML="";
+  [["split","가르기"],["merge","모으기"],["mix","섞기"]].forEach(([k,l])=>{
+    const b=document.createElement("button"); b.className="pill"+(save.settings.type===k?" on":""); b.textContent=l;
+    b.onclick=()=>{ if(save.settings.type===k) return; save.settings.type=k; persist(); newProblem(); };
+    tr.appendChild(b);
+  });
+}
 function renderStrip(){
   $("#stats").textContent=`⭐ ${totalSolved()}개  ·  🔥 ${save.streak}일 연속  ·  💯 ${save.score.toLocaleString()}점`;
   const m=$("#mission");
@@ -660,11 +683,6 @@ function _mView(){ _resetArmed=false; $("#masterErr").textContent=""; const p1=$
 function openMaster(){ $("#master").style.display="flex"; if(masterOn) mMenu(); else if(!hasMasterPw()) mCreate(); else mInput(); }
 function closeMaster(){ $("#master").style.display="none"; }
 
-function addToggle(box,label,on,fn){
-  const d=document.createElement("div"); d.className="mtoggle";
-  d.innerHTML=`<span>${label}</span><span class="sw ${on?"on":"off"}">${on?"켬":"끔"}</span>`;
-  d.onclick=fn; box.appendChild(d);
-}
 function addStepper(box,label,val,onMinus,onPlus){
   const d=document.createElement("div"); d.className="mstep";
   d.innerHTML=`<span>${label}</span><span class="sgrp"><button>−</button><b>${val}</b><button>＋</button></span>`;
@@ -673,12 +691,9 @@ function addStepper(box,label,val,onMinus,onPlus){
 function mMenu(){
   const {t,nt,p1,p2,btns}=_mView();
   t.textContent="부모 모드 🔓";
-  nt.innerHTML=`아이 난이도를 조절할 수 있어요.<br>지금 화면: <b>${STAGES[ui.level].label}</b> 단계`;
+  nt.innerHTML=`아이 난이도를 조절할 수 있어요.<br>지금 화면: <b>${STAGES[ui.level].label}</b> 단계<br><span style="font-size:12px;color:#9a917c">유형(가르기/모으기/섞기)은 풀기 화면 ‘유형’에서 골라요</span>`;
   p1.style.display="none"; p2.style.display="none";
   const s=save.settings;
-  addToggle(btns,"수 가르기", s.split, ()=>{ s.split=!s.split; if(!s.split&&!s.merge) s.split=true; persist(); newProblem(); mMenu(); });
-  addToggle(btns,"수 모으기", s.merge, ()=>{ s.merge=!s.merge; if(!s.split&&!s.merge) s.split=true; persist(); newProblem(); mMenu(); });
-  addToggle(btns,"빈칸 위치 섞기", s.shuffle, ()=>{ s.shuffle=!s.shuffle; persist(); newProblem(); mMenu(); });
   addStepper(btns,"오늘의 미션 수", s.dailyTarget,
     ()=>{ s.dailyTarget=Math.max(1,s.dailyTarget-1); persist(); renderMeta(); mMenu(); },
     ()=>{ s.dailyTarget=Math.min(50,s.dailyTarget+1); persist(); renderMeta(); mMenu(); });

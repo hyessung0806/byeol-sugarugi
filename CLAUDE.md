@@ -22,8 +22,8 @@
 ## 설정 상수 (index.html `<script>` 위쪽)
 - `STAGES[]` : 난이도 사다리. 한 줄 추가로 새 단계 생성. 예) `{ key:"s20", label:"20까지", min:11, max:20 }`
 - `POINTS=100` : 한 문제 점수
-- `DEFAULTS` : 처음 설정값 — `{ split, merge, shuffle, dailyTarget, levelTarget }`
-  - `split` 수 가르기 / `merge` 수 모으기 / `shuffle` 빈칸 위치 섞기 (부모 모드에서 토글)
+- `DEFAULTS` : 처음 설정값 — `{ type, dailyTarget, levelTarget }`
+  - `type`: `split`(가르기) / `merge`(모으기) / `mix`(섞기) — **풀기 사이드바 ‘유형’에서 선택**. `optsForType()`가 생성옵션으로 변환. (옛 split/merge/shuffle 저장값은 loadSave에서 type으로 자동 변환)
   - `dailyTarget` 하루 미션 수 / `levelTarget` 단계 통과 문제 수 (부모 모드에서 조절)
 - 저장키: `byeolsugarugi_save_v1`
 
@@ -33,7 +33,7 @@
 
 - **문제 단위**: `{ W, A, B, style:'split'|'merge', blank:'top'|'left'|'right' }`, 항상 `A+B===W`, 부분 ≥1.
 - **다이어그램**: 전부 인라인 SVG(`bondSVG`). 화면(play)·인쇄(print)·정답(answer) 3가지 모드. 인쇄 시 벡터라 깨끗.
-- **부모 모드**: 제목 길게 누르기(`bindLongPress`) → 비번. 단계 개방, 유형 토글, 미션/통과 수 조절, 비번 변경/초기화.
+- **부모 모드**: 제목 길게 누르기(`bindLongPress`) → 비번. 단계 개방, 미션/통과 수 조절, 비번 변경/초기화. (유형은 풀기 사이드바에서 선택)
 
 ## 지켜야 할 원칙
 - 저장은 localStorage지만 **항상 `Store` 래퍼(try/catch + 메모리 폴백)** 를 거친다. 직접 호출 금지.
