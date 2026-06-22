@@ -179,7 +179,9 @@
   /* ===== 가로(태블릿) 레이아웃 ===== */
   @media (min-width:820px) and (orientation:landscape) {
     :root { --bw: min(46vh, 42vw, 480px); --panel: 100%; }
-    body { display:flex; flex-direction:column; justify-content:flex-start; }
+    /* 내용이 화면보다 짧으면 세로 중앙, 길면(출력 미리보기 등) 위에서부터 — safe center */
+    body { display:flex; flex-direction:column; justify-content:safe center; }
+    body.mode-print { justify-content:flex-start; }
     .layout { flex-direction:row; align-items:flex-start; justify-content:center; gap:24px; max-width:1500px; margin:0 auto; }
     .sidebar { width:360px; flex:0 0 360px; align-items:stretch; }
     .strip, .controls, .progress, .popt, .summary, .calnav, #calGrid { margin-left:0; margin-right:0; }
@@ -408,7 +410,7 @@ function bondSVG(p, opt){
       } else if(mode==="answer"){ fill="#eef4ff"; num=vals[pos]; numCol="#3f6fd1"; }
       // print: 빈칸은 비워둠
     } else { num=vals[pos]; }
-    const r=el("rect",{x:b.x,y:b.y,width:b.w,height:b.h,rx:9,ry:9, fill:fill, stroke:st, "stroke-width":sw});
+    const r=el("rect",{x:b.x,y:b.y,width:BOX.w,height:BOX.h,rx:9,ry:9, fill:fill, stroke:st, "stroke-width":sw});
     if(pulse) r.setAttribute("class","blankpulse");
     svg.appendChild(r);
     if(num!=null){
