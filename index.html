@@ -312,8 +312,6 @@
 
 /* ===== 1) 단계 정의 — 여기에 한 줄 추가하면 새 단계가 생깁니다 ===== */
 const STAGES = [
-  { key:"s5",  label:"5까지",  min:2, max:5  },   // 입문
-  { key:"s9",  label:"9까지",  min:2, max:9  },
   { key:"s10", label:"10까지", min:2, max:10 },   // 10의 보수 포함(1학기 핵심)
   { key:"s20", label:"20까지", min:2, max:20 },   // 십몇·받아올림 준비
   { key:"s30", label:"30까지", min:2, max:30 },
@@ -342,6 +340,8 @@ function loadSave(){
   if(!s||typeof s!=="object") s={};
   save=Object.assign({ maxLevel:0, stars:{}, score:0, streak:0, bestStreak:0, lastMissionDate:"", days:{}, masterPw:"", settings:{} }, s);
   save.settings=Object.assign({}, DEFAULTS, save.settings||{});
+  if(save.maxLevel>STAGES.length-1) save.maxLevel=STAGES.length-1;   // 단계 수 변경 대비 클램프
+  if(save.maxLevel<0) save.maxLevel=0;
   if(save.lastMissionDate && save.lastMissionDate!==today() && save.lastMissionDate!==yesterday()) save.streak=0;
   persist();
 }
@@ -433,6 +433,7 @@ const hasMasterPw=()=>!!save.masterPw;
 const checkPw=p=>save.masterPw===encPw(p);
 
 function newProblem(){
+  ui.level=Math.min(Math.max(0,ui.level),STAGES.length-1);   // 안전: 항상 유효한 단계
   ui.problem=makeProblem(STAGES[ui.level], save.settings, ui.problem);
   ui.value=null; ui.answered=false;
   renderPlayBond(); buildPad(); renderMeta(); statusEl.textContent="□ 안에 알맞은 수를 골라요 👇";
