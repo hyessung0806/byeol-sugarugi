@@ -70,12 +70,13 @@
   @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.35;} }
   rect.blankpulse { animation:blink 1.1s ease-in-out infinite; }
 
-  .pad { display:grid; gap:7px; width:var(--bw); margin-top:6px; }
-  .num { background:var(--pad-bg); border:2px solid var(--line-thin); border-radius:14px;
-    font-size:22px; font-weight:800; color:var(--ink); cursor:pointer; aspect-ratio:1/1;
+  /* 0~9 숫자 키패드 (네모칸에 직접 입력) */
+  .keypad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:min(82vw,290px); margin:12px auto 2px; }
+  .key { background:var(--pad-bg); border:2px solid var(--line-thin); border-radius:14px;
+    font-size:24px; font-weight:800; color:var(--ink); cursor:pointer; aspect-ratio:1/1;
     display:flex; align-items:center; justify-content:center; transition:transform .05s, background .12s; }
-  .num:active { transform:scale(.92); background:#fff3d6; }
-  .num.bad { background:#ffd9d6; border-color:#f0a59e; }
+  .key:active { transform:scale(.92); background:#fff3d6; }
+  .key.del { font-size:17px; color:#9a6b16; background:#ffe9bf; border-color:#f4d9a3; }
 
   .actions { display:flex; gap:8px; width:var(--bw); margin-top:10px; }
   .btn { flex:1; border:none; border-radius:12px; padding:12px 0; font-size:15px; font-weight:800; cursor:pointer; transition:transform .05s; }
@@ -237,7 +238,7 @@
     <!-- 풀기 -->
     <div class="pane play-only">
       <div id="bondHost" class="bondHost"></div>
-      <div class="pad" id="pad"></div>
+      <div class="keypad" id="pad"></div>
       <div class="status" id="status"></div>
       <div class="actions">
         <button class="btn ghost" id="skipBtn">다른 문제 🔄</button>
@@ -425,38 +426,48 @@ function bondSVG(p, opt){
 }
 
 /* ===== 5) 풀기 모드 ===== */
-const ui={ level:0, problem:null, value:null, answered:false };
+const ui={ level:0, problem:null, entry:"", answered:false, _bad:false };
 const statusEl=$("#status"), bondHost=$("#bondHost"), padEl=$("#pad");
 let masterOn=false;
 const encPw=p=>btoa(unescape(encodeURIComponent(p)));
 const hasMasterPw=()=>!!save.masterPw;
 const checkPw=p=>save.masterPw===encPw(p);
 
+const ASK="아래 숫자판으로 □에 답을 써요 ✍️";
 function newProblem(){
   ui.level=Math.min(Math.max(0,ui.level),STAGES.length-1);   // 안전: 항상 유효한 단계
   ui.problem=makeProblem(STAGES[ui.level], save.settings, ui.problem);
-  ui.value=null; ui.answered=false;
-  renderPlayBond(); buildPad(); renderMeta(); statusEl.textContent="□ 안에 알맞은 수를 골라요 👇";
+  ui.entry=""; ui.answered=false; ui._bad=false;
+  renderPlayBond(); renderMeta(); statusEl.textContent=ASK;
 }
 function renderPlayBond(){
   bondHost.innerHTML="";
-  bondHost.appendChild(bondSVG(ui.problem,{mode:"play", value:ui.value, state:ui.answered?"ok":(ui._bad?"bad":null)}));
+  const svg=bondSVG(ui.problem,{mode:"play", value:ui.entry===""?null:ui.entry, state:ui.answered?"ok":(ui._bad?"bad":null)});
+  bondHost.appendChild(svg);
+  if(!ui.answered){ const bl=svg.querySelector("rect.blankpulse");   // 빈 네모를 누르면 입력 초기화
+    if(bl){ bl.style.cursor="pointer"; bl.addEventListener("click",()=>{ if(ui.answered) return; ui.entry=""; ui._bad=false; renderPlayBond(); statusEl.textContent=ASK; }); } }
 }
-function buildPad(){
-  const max=STAGES[ui.level].max;
-  const cols = max<=5 ? max : max<=20 ? 5 : 6;   // 범위가 커지면 열을 늘려 격자를 단정하게
-  padEl.style.gridTemplateColumns=`repeat(${cols},1fr)`; padEl.innerHTML="";
-  for(let n=1;n<=max;n++){ const b=document.createElement("button"); b.className="num"; b.textContent=n; b.dataset.n=n; b.onclick=()=>tapNum(n,b); padEl.appendChild(b); }
+function buildKeypad(){   // 0~9 + 지우기 (어떤 범위든 버튼 12개)
+  padEl.innerHTML="";
+  ["1","2","3","4","5","6","7","8","9","del","0"].forEach(k=>{
+    const b=document.createElement("button");
+    if(k==="del"){ b.className="key del"; b.textContent="지우기"; b.onclick=()=>tapKey("del"); }
+    else { b.className="key"; b.textContent=k; b.onclick=()=>tapKey(k); }
+    padEl.appendChild(b);
+  });
 }
-function tapNum(n, btn){
+function tapKey(k){
   if(ui.answered) return;
-  ui.value=n; ui._bad=false; renderPlayBond();
-  if(n===answerOf(ui.problem)){ ui.answered=true; onCorrect(); }
-  else {
-    ui._bad=true; renderPlayBond(); if(btn){ btn.classList.add("bad"); setTimeout(()=>btn.classList.remove("bad"),550); }
-    statusEl.textContent="앗, 다시 한 번 세어볼까요? 🙂";
-    setTimeout(()=>{ if(!ui.answered){ ui.value=null; ui._bad=false; renderPlayBond(); } },650);
+  if(k==="del"){ ui.entry=ui.entry.slice(0,-1); ui._bad=false; renderPlayBond(); statusEl.textContent=ASK; return; }
+  const ans=String(answerOf(ui.problem)), next=ui.entry+k;
+  if(Number(next)===Number(ans)){ ui.entry=next; ui.answered=true; ui._bad=false; renderPlayBond(); onCorrect(); return; }
+  if(ans.startsWith(next)){   // 두 자리 답의 앞자리 — 다음 자리를 기다림
+    ui.entry=next; ui._bad=false; renderPlayBond(); statusEl.textContent="좋아요, 한 자리 더! ✍️"; return;
   }
+  // 답이 될 수 없는 입력 → 바로 다시
+  ui.entry=next; ui._bad=true; renderPlayBond();
+  statusEl.textContent="앗, 다시 한 번 세어볼까요? 🙂";
+  setTimeout(()=>{ if(!ui.answered){ ui.entry=""; ui._bad=false; renderPlayBond(); statusEl.textContent=ASK; } },650);
 }
 function onCorrect(){
   burstStars(12);
@@ -749,6 +760,7 @@ bindLongPress($("h1"),openMaster,800);
 
 document.body.classList.add("mode-play");
 loadSave();
+buildKeypad();
 ui.level=save.maxLevel;
 newProblem();
 </script>
