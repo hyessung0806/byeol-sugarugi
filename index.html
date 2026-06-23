@@ -89,6 +89,7 @@
   .btn.hintc { background:#ffe9bf; color:#9a6b16; }
   .btn.hintc:disabled { opacity:.5; cursor:not-allowed; }
   .btn.ghost { background:#f1ece0; color:#7a715b; }
+  .btn.warn { background:#ffe1de; color:#c0392b; }
 
   .status { min-height:34px; margin-top:10px; text-align:center; font-size:14.5px; font-weight:700; color:#6f6757; line-height:1.4; width:var(--bw); }
 
@@ -681,9 +682,9 @@ function buildWorksheet(){
 }
 
 /* ===== 10) 부모(마스터) 모드 — 난이도/유형 조절 ===== */
-let _mTimer=null, _resetArmed=false;
+let _mTimer=null, _resetArmed=false, _wipeArmed=false;
 function addMBtn(box,label,kind,fn){ const b=document.createElement("button"); b.className="btn "+kind; b.textContent=label; b.onclick=fn; box.appendChild(b); }
-function _mView(){ _resetArmed=false; $("#masterErr").textContent=""; const p1=$("#masterPw1"),p2=$("#masterPw2"); p1.value=""; p2.value="";
+function _mView(){ _resetArmed=false; _wipeArmed=false; $("#masterErr").textContent=""; const p1=$("#masterPw1"),p2=$("#masterPw2"); p1.value=""; p2.value="";
   $("#masterBtns").innerHTML=""; return {t:$("#masterTitle"),nt:$("#masterNote"),p1,p2,btns:$("#masterBtns")}; }
 function openMaster(){ $("#master").style.display="flex"; if(masterOn) mMenu(); else if(!hasMasterPw()) mCreate(); else mInput(); }
 function closeMaster(){ $("#master").style.display="none"; }
@@ -707,6 +708,7 @@ function mMenu(){
     ()=>{ s.levelTarget=Math.min(100,s.levelTarget+5); persist(); renderProgress(); mMenu(); });
   addMBtn(btns,`여기까지 열어주기 (${STAGES[ui.level].label})`,"new",openUpTo);
   addMBtn(btns,"부모 모드 끄기","new",toggleMasterOff);
+  addMBtn(btns,"기록 초기화 (점수·별 0으로)","warn",resetProgress);
   addMBtn(btns,"비밀번호 변경","ghost",mChange);
   addMBtn(btns,"닫기","ghost",closeMaster);
 }
@@ -745,6 +747,14 @@ function submitMaster(){
 function resetPw(){
   if(!_resetArmed){ _resetArmed=true; $("#masterErr").textContent="한 번 더 누르면 비밀번호를 지워요(점수·도장은 유지)."; return; }
   save.masterPw=""; persist(); mCreate();
+}
+function resetProgress(){   // 기록(점수·별·도장·단계) 0으로 — 비번/설정은 유지, 두 번 눌러 확인
+  if(!_wipeArmed){ _wipeArmed=true; $("#masterErr").textContent="정말 0으로 되돌릴까요? 한 번 더 누르면 점수·별·도장·단계가 모두 초기화돼요(되돌릴 수 없음)."; return; }
+  save.score=0; save.stars={}; save.days={}; save.streak=0; save.bestStreak=0; save.lastMissionDate=""; save.maxLevel=0;
+  _wipeArmed=false; persist();
+  masterOn=false; ui.level=0;            // 초기화 후 부모모드 끄고 첫 단계로 — 이제부터 아이 풀이가 기록됨
+  closeMaster(); navTo("play"); newProblem();
+  statusEl.textContent="기록을 모두 0으로 되돌렸어요. 새로 시작해요! ✨";
 }
 function openUpTo(){
   if(ui.level>save.maxLevel){ save.maxLevel=ui.level; persist(); }
