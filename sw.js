@@ -1,6 +1,7 @@
-/* 별 수가르기 — 오프라인 캐싱 서비스워커 */
-/* 파일을 수정해 다시 배포할 때는 아래 버전 숫자를 올리세요 (예: v1 → v2) */
-const CACHE = "byeolsugarugi-v8";
+/* 별 수가르기 — 오프라인 캐싱 + 자동 업데이트 서비스워커 */
+/* HTML은 '네트워크 우선'이라 내용을 고쳐 배포하면 다음 실행 때 자동 반영됩니다.
+   아래 버전 숫자는 sw.js 자체나 ASSETS 목록을 바꿀 때만 올리면 됩니다. */
+const CACHE = "byeolsugarugi-v9";
 const ASSETS = [
   "./",
   "./index.html",
@@ -26,12 +27,28 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
-  e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request).then((resp) => {
+  const req = e.request;
+  const isHTML = req.mode === "navigation" || (req.headers.get("accept") || "").includes("text/html");
+
+  if (isHTML) {
+    // 화면(HTML)은 네트워크 우선: 온라인이면 항상 최신, 실패(오프라인)하면 캐시
+    e.respondWith(
+      fetch(req).then((resp) => {
         const copy = resp.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        caches.open(CACHE).then((c) => c.put("./index.html", copy)).catch(() => {});
+        return resp;
+      }).catch(() => caches.match(req).then((r) => r || caches.match("./index.html")))
+    );
+    return;
+  }
+
+  // 그 외(아이콘·매니페스트 등)는 캐시 우선
+  e.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req).then((resp) => {
+        const copy = resp.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
         return resp;
       }).catch(() => cached);
     })
