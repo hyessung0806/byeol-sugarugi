@@ -3,19 +3,19 @@ type: project
 aliases:
   - 별 수가르기
   - 수 가르기 모으기
-description: "Single-file PWA for number bonds (split/merge) practice for a 1st-grade child (star series): solve on tablet plus infinite A4 worksheet printing. Reference for status: built, verified, deployed; remaining is real-device check."
+description: "Single-file PWA for number bonds (split/merge) practice for a 1st-grade child (star series): solve on tablet plus infinite A4 worksheet printing. Reference for status: built, verified, deployed, real-device confirmed and wrapped up; only optional extensions remain."
 author:
   - "[[김혜성]]"
 date created: 2026-06-24
-date modified: 2026-06-24
+date modified: 2026-06-26
 tags:
   - project
   - 별시리즈
   - PWA
-status: 진행중
+status: 완료
 started: 2026-06-22
 updated: 2026-06-24
-remarks: "도장 조건 가르기20+모으기20(자동안내)·자동업데이트(네트워크우선 sw) 완료. 남음: 실기기 점검. 선택: 효과음·셈 도우미·가르기 3칸"
+remarks: "실기기 확인까지 마치고 마무리(2026-06-26). 도장 조건 가르기20+모으기20(자동안내)·자동업데이트(네트워크우선 sw) 동작. 추가 필요 시(선택): 효과음·셈 도우미·가르기 3칸"
 deploy: "https://hyessung0806.github.io/byeol-sugarugi/"
 stack: "단일 파일 PWA (HTML/CSS/JS, 무 CDN)"
 ---
@@ -35,5 +35,5 @@ stack: "단일 파일 PWA (HTML/CSS/JS, 무 CDN)"
 - 이전(06-22): 코드·검증(생성기 8만+회·jsdom 회귀)·배포 + 피드백 7건 반영.
 
 ## 남은 작업
-- 실제 기기 점검: 갤럭시탭/아이폰·아이패드에서 가르기20·모으기20 도장 + 자동 업데이트(재설치 없이 갱신) 확인
+- **(2026-06-26) 실기기 확인까지 마치고 프로젝트 마무리.** 추가 요청이 생기면 그때 재개.
 - (선택) 효과음 / 셈 도우미(점 표시) / 가르기 3칸 등 확장
