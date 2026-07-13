@@ -7,15 +7,15 @@ description: "Single-file PWA for number bonds (split/merge) practice for a 1st-
 author:
   - "[[김혜성]]"
 date created: 2026-06-24
-date modified: 2026-06-26
+date modified: 2026-07-13
 tags:
   - project
   - 별시리즈
   - PWA
 status: 완료
 started: 2026-06-22
-updated: 2026-06-24
-remarks: "실기기 확인까지 마치고 마무리(2026-06-26). 도장 조건 가르기20+모으기20(자동안내)·자동업데이트(네트워크우선 sw) 동작. 추가 필요 시(선택): 효과음·셈 도우미·가르기 3칸"
+updated: 2026-07-13
+remarks: "2026-07-13 S펜 풀이 연습장 추가(gobsem과 동일 Pad, 문제 옆/아래 캔버스·팜 리젝션)·로컬 검증 완료. ⚠️배포 보류=이 저장소는 실명 문서 통째 공개+직접 push라 방식(비공개+deploy.sh 이관?) 확정 후. 이전: 실기기 확인·도장 가르기20+모으기20."
 deploy: "https://hyessung0806.github.io/byeol-sugarugi/"
 stack: "단일 파일 PWA (HTML/CSS/JS, 무 CDN)"
 ---

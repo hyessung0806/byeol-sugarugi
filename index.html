@@ -68,6 +68,24 @@
   /* 다이어그램(왼쪽) + 키패드(오른쪽) 나란히, 좁으면 자동 줄바꿈 */
   .playrow { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:16px 30px; width:100%; }
   .playrow .keypad { margin:4px 0 0; }
+
+  /* 놀기: 문제 | 연습장 (넓은 가로면 오른쪽, 좁으면 아래로 자동) */
+  #playArea { display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start; gap:14px; width:100%; }
+  #playCol { display:flex; flex-direction:column; align-items:center; flex:1 1 420px; min-width:0; }
+  /* 풀이 연습장 (S펜 필기) */
+  .scratch { flex:1 1 320px; min-width:0; max-width:640px; margin-top:6px;
+    background:var(--pad-bg,#fffdf8); border:2px solid var(--line-thin,#e3ddd0); border-radius:16px; padding:8px 10px 10px; }
+  .scratch-head { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px; flex-wrap:wrap; }
+  .scratch-title { font-weight:900; font-size:14px; color:var(--ink); }
+  .scratch-tools { display:flex; gap:5px; flex-wrap:wrap; }
+  .sctool { border:2px solid var(--line-thin,#e3ddd0); background:#fff; color:var(--ink); border-radius:999px;
+    padding:5px 9px; font-size:12.5px; font-weight:800; cursor:pointer; transition:transform .05s; }
+  .sctool:active { transform:scale(.95); }
+  .sctool.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .scpad-wrap { position:relative; width:100%; height:clamp(190px,30vh,320px);
+    background:#fff; border:2px dashed #d8d0bf; border-radius:12px; overflow:hidden; touch-action:none; }
+  #scPad { position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block; cursor:crosshair; }
+  .scratch.hidden .scpad-wrap { display:none; }
   svg.bond { width:100%; height:auto; display:block; }
   svg.bond text { font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif; font-weight:800; }
   @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.35;} }
@@ -191,7 +209,8 @@
     .layout { flex-direction:row; align-items:flex-start; justify-content:center; gap:24px; max-width:1500px; margin:0 auto; }
     .sidebar { width:360px; flex:0 0 360px; align-items:stretch; }
     .strip, .controls, .progress, .popt, .summary, .calnav, #calGrid { margin-left:0; margin-right:0; }
-    .main { flex:0 0 auto; width:auto; min-width:0; }
+    .main { flex:0 1 auto; width:auto; min-width:0; }
+    .scpad-wrap { height:min(58vh,520px); }
     .sidebar h1 { font-size:30px; }
     .sidebar .tab { font-size:15px; padding:8px 16px; }
     .sidebar .strip { font-size:16px; padding:11px 16px; }
@@ -243,13 +262,30 @@
   <main class="main">
     <!-- 풀기 -->
     <div class="pane play-only">
-      <div class="playrow">
-        <div id="bondHost" class="bondHost"></div>
-        <div class="keypad" id="pad"></div>
-      </div>
-      <div class="status" id="status"></div>
-      <div class="actions">
-        <button class="btn ghost" id="skipBtn">다른 문제 🔄</button>
+      <div id="playArea">
+        <div id="playCol">
+          <div class="playrow">
+            <div id="bondHost" class="bondHost"></div>
+            <div class="keypad" id="pad"></div>
+          </div>
+          <div class="status" id="status"></div>
+          <div class="actions">
+            <button class="btn ghost" id="skipBtn">다른 문제 🔄</button>
+          </div>
+        </div>
+        <div id="scratchBox" class="scratch">
+          <div class="scratch-head">
+            <span class="scratch-title">✏️ 연습장</span>
+            <span class="scratch-tools">
+              <button id="scPen" class="sctool on">✏️ 펜</button>
+              <button id="scErase" class="sctool">🧽 지우개</button>
+              <button id="scFinger" class="sctool">✋ 손가락</button>
+              <button id="scClear" class="sctool">🗑️ 전체</button>
+              <button id="scHide" class="sctool" title="접기/펴기">▾</button>
+            </span>
+          </div>
+          <div id="scPadWrap" class="scpad-wrap"><canvas id="scPad"></canvas></div>
+        </div>
       </div>
     </div>
 
@@ -327,7 +363,7 @@ const STAGES = [
   // 더 늘리려면 한 줄 추가. 예) { key:"s50", label:"50까지", min:2, max:50 },
 ];
 const POINTS = 100;                 // 한 문제당 점수
-const DEFAULTS = { type:"split", dailyTarget:20, levelTarget:20 };   // dailyTarget = 유형별 하루 목표(가르기·모으기 각각) / type: split|merge|mix
+const DEFAULTS = { type:"split", dailyTarget:20, levelTarget:20, scratchOn:true };   // dailyTarget = 유형별 하루 목표(가르기·모으기 각각) / type: split|merge|mix
 
 /* ===== 2) 저장소 (배포=자동저장 / 미리보기=메모리 폴백) ===== */
 const Store = (() => {
@@ -453,6 +489,59 @@ function bondSVG(p, opt){
 const ui={ level:0, problem:null, entry:"", answered:false, _bad:false };
 const statusEl=$("#status"), bondHost=$("#bondHost"), padEl=$("#pad");
 let masterOn=false;
+
+/* ===== 풀이 연습장 (S펜 필기) — byeol-gobsem과 동일(성경통독 필사 패턴, 영속화·완료판정 없이) ===== */
+const Pad = (() => {
+  let cv=null, ctx=null, DPR=1, strokes=[], cur=null, mode="pen", finger=false, erasing=false, ready=false, rect=null;
+  const PEN_W=2.6, ERASE_R=16;
+  function size(){ if(!cv) return; ctx=(cv.getContext&&cv.getContext("2d"))||null; if(!ctx){ ready=false; return; }
+    const r=cv.getBoundingClientRect(); if(!r.width||!r.height){ ready=false; return; }
+    DPR=Math.min(window.devicePixelRatio||1,2.5);
+    cv.width=Math.round(r.width*DPR); cv.height=Math.round(r.height*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0); ready=true; redraw(); }
+  function redraw(){ if(!ctx) return; ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.restore();
+    for(const s of strokes) drawS(s); if(cur) drawS(cur); }
+  function drawS(s){ if(s.pts.length===1){ const a=s.pts[0]; seg(a,{x:a.x+0.6,y:a.y+0.6,p:a.p}); return; }
+    for(let i=1;i<s.pts.length;i++) seg(s.pts[i-1],s.pts[i]); }
+  function seg(a,b){ if(!ctx) return; ctx.globalCompositeOperation="source-over"; ctx.strokeStyle="#1f2730";
+    ctx.lineCap="round"; ctx.lineJoin="round"; const p=(a.p+b.p)/2; ctx.lineWidth=PEN_W*(0.85+0.5*p);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+  function pt(e){ const r=rect||cv.getBoundingClientRect(); let p=e.pressure; if(!p||e.pointerType!=="pen") p=0.5;
+    return { x:e.clientX-r.left, y:e.clientY-r.top, p }; }
+  function canDraw(e){ if(e.pointerType==="pen"||e.pointerType==="mouse") return true;
+    if(e.pointerType==="touch") return finger; return false; } // 기본 펜 전용(팜 리젝션), 손가락은 토글 시
+  function penErase(e){ const b=e.buttons||0; return e.pointerType==="pen"&&((b&32)||(b&2)||e.button===5||e.button===2); }
+  function wantErase(e){ return mode==="erase"||penErase(e); }
+  function d2s(px,py,a,b){ const dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy; if(!l2) return Math.hypot(px-a.x,py-a.y);
+    let t=((px-a.x)*dx+(py-a.y)*dy)/l2; t=t<0?0:t>1?1:t; return Math.hypot(px-(a.x+t*dx),py-(a.y+t*dy)); }
+  function eraseAt(x,y){ let ch=false; for(let i=strokes.length-1;i>=0;i--){ const pts=strokes[i].pts; let hit=false;
+      if(pts.length===1) hit=Math.hypot(x-pts[0].x,y-pts[0].y)<=ERASE_R+PEN_W;
+      else for(let j=1;j<pts.length;j++) if(d2s(x,y,pts[j-1],pts[j])<=ERASE_R){ hit=true; break; }
+      if(hit){ strokes.splice(i,1); ch=true; } } if(ch) redraw(); }
+  function down(e){ if(!ready) size(); if(!canDraw(e)) return; e.preventDefault();
+    try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+    rect=cv.getBoundingClientRect(); const q=pt(e);
+    if(wantErase(e)){ erasing=true; cur=null; eraseAt(q.x,q.y); return; }
+    erasing=false; cur={pts:[q]}; drawS(cur); }
+  function move(e){ if(erasing){ e.preventDefault(); const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
+      for(const ev of evs){ const q=pt(ev); eraseAt(q.x,q.y); } return; }
+    if(cur&&penErase(e)){ cur=null; erasing=true; e.preventDefault(); const q=pt(e); eraseAt(q.x,q.y); return; }
+    if(!cur) return; e.preventDefault(); const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
+    for(const ev of evs){ const q=pt(ev); const last=cur.pts[cur.pts.length-1]; cur.pts.push(q); seg(last,q); } }
+  function up(){ if(erasing){ erasing=false; return; } if(!cur) return; strokes.push(cur); cur=null; }
+  return {
+    init(canvas){ cv=canvas; if(!cv) return; size();
+      cv.addEventListener("pointerdown",down,{passive:false});
+      cv.addEventListener("pointermove",move,{passive:false});
+      cv.addEventListener("pointerup",up); cv.addEventListener("pointercancel",up);
+      cv.addEventListener("pointerenter",()=>{ rect=cv.getBoundingClientRect(); });
+      if(typeof ResizeObserver!=="undefined"){ try{ new ResizeObserver(()=>size()).observe(cv); }catch(_){ } }
+      window.addEventListener("resize",()=>{ ready=false; });
+      window.addEventListener("orientationchange",()=>{ ready=false; setTimeout(size,300); }); },
+    size, clear(){ strokes=[]; cur=null; if(ctx) redraw(); },
+    setMode(m){ mode=m; }, setFinger(f){ finger=f; }, ready:()=>ready
+  };
+})();
 const encPw=p=>btoa(unescape(encodeURIComponent(p)));
 const hasMasterPw=()=>!!save.masterPw;
 const checkPw=p=>save.masterPw===encPw(p);
@@ -468,6 +557,7 @@ function newProblem(){
   ui.problem=makeProblem(STAGES[ui.level], optsForType(type), ui.problem);
   ui.entry=""; ui.answered=false; ui._bad=false;
   renderPlayBond(); renderMeta(); statusEl.textContent=ASK;
+  if(typeof Pad!=="undefined") Pad.clear(); // 새 문제 = 새 연습장
 }
 function renderPlayBond(){
   bondHost.innerHTML="";
@@ -604,6 +694,7 @@ function navTo(name){
   $("#tabPrint").classList.toggle("on",name==="print");
   $("#tabHist").classList.toggle("on",name==="history");
   if(name==="history"){ const d=new Date(); calY=d.getFullYear(); calM=d.getMonth(); renderHistory(); }
+  if(name==="play" && typeof Pad!=="undefined"){ requestAnimationFrame(Pad.size); } // 화면 보이면 연습장 크기 재계산
 }
 function renderHistory(){
   const days=save.days||{};
@@ -805,8 +896,24 @@ $("#prMake").onclick=buildWorksheet;
 $("#prPrint").onclick=()=>window.print();
 bindLongPress($("h1"),openMaster,800);
 
+/* 연습장(필기) 연결 */
+function setSctool(m){ $("#scPen").classList.toggle("on",m==="pen"); $("#scErase").classList.toggle("on",m==="erase"); Pad.setMode(m);
+  statusEl.textContent = m==="erase" ? "지우개 — 획에 닿으면 통째로 지워져요 🧽" : ""; }
+function toggleScFinger(){ const on=!$("#scFinger").classList.contains("on"); $("#scFinger").classList.toggle("on",on); Pad.setFinger(on);
+  statusEl.textContent = on ? "손가락으로도 쓸 수 있어요 ✋ (S펜이 있으면 꺼두면 손바닥이 안 닿아요)" : "다시 펜으로 써요 ✏️"; }
+function applyScratch(){ const on=save.settings.scratchOn!==false; $("#scratchBox").classList.toggle("hidden",!on);
+  $("#scHide").textContent = on ? "▾" : "▸"; if(on) requestAnimationFrame(Pad.size); }
+function toggleScratch(){ save.settings.scratchOn = $("#scratchBox").classList.contains("hidden"); persist(); applyScratch(); }
+$("#scPen").onclick=()=>setSctool("pen");
+$("#scErase").onclick=()=>setSctool("erase");
+$("#scFinger").onclick=toggleScFinger;
+$("#scClear").onclick=()=>Pad.clear();
+$("#scHide").onclick=toggleScratch;
+
 document.body.classList.add("mode-play");
 loadSave();
+Pad.init($("#scPad"));
+applyScratch();
 buildKeypad();
 ui.level=save.maxLevel;
 newProblem();
