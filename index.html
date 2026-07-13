@@ -71,7 +71,9 @@
 
   /* 놀기: 문제 | 연습장 (넓은 가로면 오른쪽, 좁으면 아래로 자동) */
   #playArea { display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start; gap:14px; width:100%; }
-  #playCol { display:flex; flex-direction:column; align-items:center; flex:1 1 420px; min-width:0; }
+  /* 문제 칸(수묶음 그림+키패드)은 나란히 유지되게 넉넉한 폭 확보(그림360+키패드270+여백). 안 맞으면 연습장이 아래로 */
+  #playCol { display:flex; flex-direction:column; align-items:center; flex:0 1 680px; min-width:0; }
+  #playCol .playrow { width:100%; }
   /* 풀이 연습장 (S펜 필기) */
   .scratch { flex:1 1 320px; min-width:0; max-width:640px; margin-top:6px;
     background:var(--pad-bg,#fffdf8); border:2px solid var(--line-thin,#e3ddd0); border-radius:16px; padding:8px 10px 10px; }
